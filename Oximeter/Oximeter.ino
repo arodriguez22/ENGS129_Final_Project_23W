@@ -39,7 +39,7 @@ int pwm_output = 128;
 const int fb = 31; //pin where the feeback signal comes in
 //Analog Input Values
 const double alpha = 0.05;
-double fb_val = 1.65;
+double fb_val;
 double fb_val_new;
 
 //const int T = 100;
@@ -50,7 +50,7 @@ int highNum = 256;
 int lowNum = 0;
 int possibleNum = highNum + lowNum -1;
 int possibleNumNew;
-int thresh = 10; // Make higher
+double thresh = 3.0; // Make higher
 
 volatile unsigned long blinkCount = 0;
 volatile unsigned long cycleCount = 0;
@@ -80,7 +80,7 @@ void setup(void)
   Timer3.initialize(10); //set timer for 10um
   Timer3.attachInterrupt(count1); // count every 10 microseconds
 
-  //fb_val = 3.3/1024 * analogRead(fb);
+  fb_val = 3.3/1024 * analogRead(fb);
   Serial.begin(baudRate);
 }
 
@@ -127,14 +127,6 @@ void count2(void) {
 }
 
 void changePWM(void){
-
-  
-  if (abs(analogRead(fb) - fb_val) >= thresh){
-    possibleNum = highNum + lowNum -1;
-    pwm_output = ceil(possibleNum / 2.0);
-    highNum = 256;
-    lowNum = 0;
-  }
   
   if (fb_val > 1.7){
     highNum = pwm_output -1;
@@ -143,8 +135,18 @@ void changePWM(void){
     lowNum = pwm_output + 1;
   }
 
-  possibleNum = highNum + lowNum -1;
-  pwm_output = ceil(possibleNum / 2.0);
+  if (3.3/1024 * analogRead(fb) >= thresh){
+    //possibleNum = highNum + lowNum -1;
+    //pwm_output = ceil(possibleNum / 2.0);
+    highNum = 256;
+    lowNum = 0;
+    //Serial.println("triggered");
+  }
+  
+  else {
+    possibleNum = highNum + lowNum -1;
+    pwm_output = ceil(possibleNum / 2.0);
+  }
   
 //  possibleNumNew = highNum + lowNum -1;
 //  
@@ -246,14 +248,14 @@ void loop(void)
   //Serial.println(ADCdata1);
   
   ////Print PWM values
-  //Serial.print("PWM = ");
-  //Serial.println(pwm_output);
-  //Serial.print("High = ");
-  //Serial.println(highNum);
-  //Serial.print("Low = ");
-  //Serial.println(lowNum);
-  //Serial.print("Output = ");
-  //Serial.println(3.3/256 * pwm_output);
+//  Serial.print("PWM = ");
+//  Serial.println(pwm_output);
+//  Serial.print("High = ");
+//  Serial.println(highNum);
+//  Serial.print("Low = ");
+//  Serial.println(lowNum);
+//  Serial.print("Output = ");
+//  Serial.println(3.3/256 * pwm_output);
 
   ////print Feedback value
   //Serial.print("feedback = ");
