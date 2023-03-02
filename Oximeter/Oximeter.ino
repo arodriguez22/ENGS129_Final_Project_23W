@@ -50,6 +50,7 @@ int highNum = 256;
 int lowNum = 0;
 int possibleNum = highNum + lowNum -1;
 int possibleNumNew;
+int thresh = 10; // Make higher
 
 volatile unsigned long blinkCount = 0;
 volatile unsigned long cycleCount = 0;
@@ -127,6 +128,14 @@ void count2(void) {
 
 void changePWM(void){
 
+  
+  if (abs(analogRead(fb) - fb_val) >= thresh){
+    possibleNum = highNum + lowNum -1;
+    pwm_output = ceil(possibleNum / 2.0);
+    highNum = 256;
+    lowNum = 0;
+  }
+  
   if (fb_val > 1.7){
     highNum = pwm_output -1;
   }
