@@ -67,6 +67,8 @@ int midPoint = 1.65;
 bool peaking = false; 
 int peaks[max_peaks] = {0};
 int peak_times[max_peaks] = {0};
+int peak_times_volts[max_peaks] = {0};
+
   // How many peaks recorded
 int num_of_peaks = 0;
 
@@ -97,6 +99,9 @@ int voltage_stream = 0;
 // Heart counters
 int heart_sum = 0;
 int time_sum = 0;
+
+float heart_average = 0;
+float time_average = 0;
 
 volatile unsigned long blinkCount = 0;
 volatile unsigned long cycleCount = 0;
@@ -327,15 +332,31 @@ void loop(void)
     // Get Heart Rate
 
       // Convert ms to minute
+
+        for (int i=0; i<max_peaks; i++){
+          peak_times_voltage[max_peaks] = peak_times[max_peaks] * 1/60000; // divide by 1000 to get to second, then divide again to get to minutes
+         }
       
       // take the time difference between each point and divide it by the peak
+
+      peak_times_diff[0] = peak_times_voltage[1] - peak_times_voltage[0];
+      peak_times_diff[1] = peak_times_voltage[2] - peak_times_voltage[1];
+      peak_times_diff[2] = peak_times_voltage[3] - peak_times_voltage[2];
+      peak_times_diff[3] = peak_times_voltage[3] - peak_times_voltage[3];
+      peak_times_diff[4] = peak_times_voltage[4] - peak_times_voltage[4];
+
+      peak_time_diff_sum = peak_times_diff[0] + peak_times_diff[1] + peak_times_diff[2] + peak_times_diff[3] + peak_times_diff[4];
       
       // Average the values out
+
+      peak_time_diff_average = peak_time_diff_sum / 5; 
 
     // Get AC amplitude
       // PREV STEP: CREATE 5 VERY LARGE ARRAYS, KEEP TRACK OF THE VOLTAGE TILL THE THRESHOLD IS REACHED AGAIN
       // take the maxes of each
 
+        
+          
          index_1_max = max(index_1);
          index_2_max = max(index_2);
          index_3_max = max(index_3);
@@ -346,14 +367,25 @@ void loop(void)
       
       // AVerage them
 
-       heart_sum = (index_1_max-midPoint)+(index_2_max-midPoint)+(index_3_max-midPoint)+(index_4_max-midPoint)+(index_5_max-midPoint) 
+       amplitude_sum = (index_1_max-midPoint)+(index_2_max-midPoint)+(index_3_max-midPoint)+(index_4_max-midPoint)+(index_5_max-midPoint);
+
+       amplitude_average = amplitude_sum/max_peaks;
 
       ////////// take time average 
 
-       time_sum;
+       time_sum=peak_times_voltage[0]+peak_times_voltage[1]+peak_times_voltage[2]+peak_times_voltage[3]+peak_times_voltage[4];
 
-      hr = (heart_sum)/time_sum;
-      
+       time_average = time_sum/max_peaks;
+
+      SaO2 = (heart_average)/time_average;
+      hr = 5 / peak_time_diff_average;
+
+
+      Serial.print("Heartbeat = ");
+      Serial.println(hr);
+
+      Serial.print("SaO2 = ");
+      Serial.println(Sa02);
   }
   }
   
