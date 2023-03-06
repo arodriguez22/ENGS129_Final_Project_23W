@@ -82,9 +82,21 @@ int index_3[index_1_count] = {0};
 int index_4[index_1_count] = {0};
 int index_5[index_1_count] = {0};
 
+
+int index_1_max = 0;
+int index_2_max = 0;
+int index_3_max = 0;
+int index_4_max = 0;
+int index_5_max = 0;
+
+
 // Counter for voltage array
 
 int voltage_stream = 0;
+
+// Heart counters
+int heart_sum = 0;
+int time_sum = 0;
 
 volatile unsigned long blinkCount = 0;
 volatile unsigned long cycleCount = 0;
@@ -324,21 +336,21 @@ void loop(void)
       // PREV STEP: CREATE 5 VERY LARGE ARRAYS, KEEP TRACK OF THE VOLTAGE TILL THE THRESHOLD IS REACHED AGAIN
       // take the maxes of each
 
-    int index_1_max = max(index_1);
-    int index_2_max = max(index_2);
-    int index_3_max = max(index_3);
-    int index_4_max = max(index_4);
-    int index_5_max = max(index_5);
+         index_1_max = max(index_1);
+         index_2_max = max(index_2);
+         index_3_max = max(index_3);
+         index_4_max = max(index_4);
+         index_5_max = max(index_5);
       
       // subtract 1.65 from each value
       
       // AVerage them
 
-      int heart_sum = (index_1_max-midPoint)+(index_2_max-midPoint)+(index_3_max-midPoint)+(index_4_max-midPoint)+(index_5_max-midPoint) 
+       heart_sum = (index_1_max-midPoint)+(index_2_max-midPoint)+(index_3_max-midPoint)+(index_4_max-midPoint)+(index_5_max-midPoint) 
 
       ////////// take time average 
 
-      int time_sum;
+       time_sum;
 
       hr = (heart_sum)/time_sum;
       
