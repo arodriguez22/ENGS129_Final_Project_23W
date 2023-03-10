@@ -1,8 +1,12 @@
-#include <TimerThree.h>
+
 #include <SPI.h>
 // Online C compiler to run C program online
 #include <stdio.h>
 
+//window variables
+const int window_size = 12;
+int window[window_size];
+int i = 0;
 
 // threshold above the midpoint 1.65V that defines a peak
 int midPoint = 10;
@@ -30,7 +34,7 @@ int ADCdata0_new;
 int ADCdata1;
 
 // SPI Settings: speed, mode and endianness
-SPISettings settings(1000000, MSBFIRST, SPI_MODE2);  // 1MHz, MSB,
+SPISettings settings(1000000, MSBFIRST, SPI_MODE2);  // 1MHz, MSB, 
 
 //Digital Output pins
 const int red_switch = 27;  // the pin connected to the RED switch
@@ -41,7 +45,7 @@ int irState = LOW;
 
 //Analog Output pins
 const int red = 29;  // the pin with the Red LED
-const int ir = 30; // the pin with the IR
+const int ir = 30; // the pin with the IR 
 //Analog Output Values
 int pwm_output = 128;
 
@@ -52,6 +56,8 @@ const double alpha = 0.05;
 double fb_val = 1.65;
 double fb_val_new;
 
+//const int T = 100;
+//const long d = 0.25;
 
 //PWM Algorithm
 int highNum = 256;
@@ -60,62 +66,35 @@ int possibleNum = highNum + lowNum -1;
 int possibleNumNew;
 double threshHold = 3.0; // Make higher
 
-
-//Threshold Method
-int max_peaks = 5;
-int midPoint = 1.65;
-bool peaking = false; 
-int peaks[max_peaks] = {0};
-int peak_times[max_peaks] = {0};
-int peak_times_volts[max_peaks] = {0};
-
-  // How many peaks recorded
-int num_of_peaks = 0;
-
-
-// Enough so that we just need to use the max function
-int index_1_count = 100;
-
-
-// VOltage arrays for each of the indices of the peaks array. We want it large enough to hit the other zero. 
-int index_1[index_1_count] = {0};
-int index_2[index_1_count] = {0};
-int index_3[index_1_count] = {0};
-int index_4[index_1_count] = {0};
-int index_5[index_1_count] = {0};
-
-
-int index_1_max = 0;
-int index_2_max = 0;
-int index_3_max = 0;
-int index_4_max = 0;
-int index_5_max = 0;
-
-
-// Counter for voltage array
-
-int voltage_stream = 0;
-
-// Heart counters
-int heart_sum = 0;
-int time_sum = 0;
-
-float heart_average = 0;
-float time_average = 0;
-
 volatile unsigned long blinkCount = 0;
 volatile unsigned long cycleCount = 0;
+
+//Heart Rate variables
+double peak_time[12] = {0};
+int num_peak = 0;
+double avg_time = 0;
+
+//Oxygen Variables
+double SO2 = 0;
+double red_level = 0;
+double ir_level = 0;
+int max_ir = 2048;
+int min_ir = 2048;
+int max_red = 2048;
+int min_red = 2048;
+
+#include <TimerThree.h>
 
 void setup(void)
 {
   pinMode(CSPin, OUTPUT);
-
+  
   // Configure SPI Pins
   SPI.begin();
   SPI.setMISO(MISOPin0);
   SPI.setMOSI(MOSIPin);
   SPI.setSCK(SCKPin);
-
+  
   //Set the PWM frequency
   analogWriteFrequency(29, 4000);//4000hz for pin 29 and 30
   analogWriteFrequency(30, 4000);//4000hz for pin 29 and 30
@@ -127,7 +106,7 @@ void setup(void)
   pinMode(ir, OUTPUT);
   pinMode(fb, INPUT);
 
-  //Set/Run timer + interrupt
+  //Set timer + interrupt
   Timer3.initialize(10); //set timer for 10um
   Timer3.attachInterrupt(count1); // count every 10 microseconds
 
@@ -138,27 +117,26 @@ void setup(void)
 
 // The interrupt will increment the count and blink the LEDs depending on the current count
 void count1(void) {
-  blinkCount = blinkCount + 1;  // increase when LED turns on
+  blinkCount = blinkCount + 1;  // increment everytime the timer finishes a period
 
-  fb_val_new = 3.3/1024 * analogRead(fb);
-  fb_val = (alpha * fb_val_new) + ((1- alpha) * fb_val);
-
-  if (blinkCount == 1) {
-    blinkRED();
+  fb_val_new = 3.3/1024 * analogRead(fb); //read the new feedback values
+  fb_val = (alpha * fb_val_new) + ((1- alpha) * fb_val); //add the value to the average feedback
+  
+  if (blinkCount == 1) {//at 10s
+    blinkRED(); //turn the red LED on
   }
-  else if ( blinkCount == 26) {
-    blinkRED();
+  else if ( blinkCount == 26) {//at 260us
+    blinkRED(); //turn the red LED off
   }
-  else if ( blinkCount == 51) {
+  else if ( blinkCount == 51) {//at 510us
+    blinkIR();//turn the ir LED on
+  }
+  else if ( blinkCount == 76) {//at 760us
     blinkIR();
   }
-  else if ( blinkCount == 76) {
-    blinkIR();
-  }
-  else if(blinkCount >= 100) {
-    blinkCount = 0;
+  else if(blinkCount >= 100) {//at 1ms
+    blinkCount = 0;//reset the count (repeat the cycle
     count2();
-    //heart_rate();
   }
 }
 
@@ -171,14 +149,18 @@ void count2(void) {
 }
 
 void changePWM(void){
-
+  
   if (fb_val > 1.7){
     highNum = pwm_output -1;
   }
   else if (fb_val < 1.6){
     lowNum = pwm_output + 1;
   }
-  
+  else {
+    highNum = pwm_output  + 5;
+    lowNum = pwm_output - 5;
+  }
+
   if (3.3/1024 * analogRead(fb) >= threshHold){
     //possibleNum = highNum + lowNum -1;
     //pwm_output = ceil(possibleNum / 2.0);
@@ -186,11 +168,12 @@ void changePWM(void){
     lowNum = 0;
     //Serial.println("triggered");
   }
-
+  
   else {
     possibleNum = highNum + lowNum -1;
     pwm_output = ceil(possibleNum / 2.0);
   }
+}
 
 void blinkRED(void)
 {
@@ -198,12 +181,12 @@ void blinkRED(void)
 
   //Toggle the red LED
   if (redState == LOW) {
-    redState = HIGH;
+    redState = HIGH; 
   }
   else {
     redState = LOW;
   }
-
+  
   if (redState == LOW) {
     analogWrite(red, 0);
     digitalWrite(red_switch, redState);
@@ -212,20 +195,19 @@ void blinkRED(void)
     analogWrite(red, pwm_output);
     digitalWrite(red_switch, redState);
   }
-
 }
 
 void blinkIR(void)
 {
   //fb_val = 3.3/1024 * analogRead(fb);
-
+  
   if (irState == LOW) {
-    irState = HIGH;
+    irState = HIGH; 
   }
   else {
     irState = LOW;
   }
-
+  
   if (irState == LOW) {
     analogWrite(ir, 0);
     digitalWrite(ir_switch, irState);
@@ -234,159 +216,137 @@ void blinkIR(void)
     analogWrite(ir, pwm_output);
     digitalWrite(ir_switch, irState);
   }
-
 }
 
 void getADC(byte* data, int whichMISO) {
-
+  
   SPI.setMISO(whichMISO);    // set MISO pin
 
   SPI.beginTransaction(settings);
   digitalWrite(CSPin,LOW);   // pull CSPin low to start SPI communication
   data[0] = SPI.transfer(0); // grab upper byte
-  data[1] = SPI.transfer(0); // grab lower byte   
+  data[1] = SPI.transfer(0); // grab lower byte    
   digitalWrite(CSPin,HIGH);  // set CSPin high to end SPI communication
 
   SPI.endTransaction();
 }
 
-String window_print(){
-    String output = "[ ";
-    for (int k=0;k<window_size;k++){
-
-        if (k==0){
-            output = output + window[k] + " ";
-        }else{
-            output = output + window[k] + " ";
-        }
-    }
-    output = output + " ]";
-
-    return output;
-}
-
 void loop(void)
 {
-
-  
 
   //read ADC0
   getADC(data, MISOPin0);
   ADCdata0_old = ADCdata0;
-  ADCdata0 = ADCdata0_new;
-  ADCdata0_new = ((data[0] << 8) + data[1]);
-
+  ADCdata0 = ((data[0] << 8) + data[1]);
+  
   //read ADC1
-  getADC(data, MISOPin1); 
+  getADC(data, MISOPin1);  
   ADCdata1 = ((data[0] << 8) + data[1]);
 
-// Checks if threashold cross while only counting every other cross and noting those times
-  if(ADCdata0 >= midPoint && peaking == false){
-    peaks[num_of_peaks] = ADCdata0;
-    peak_times[num_of_peaks] = millis();
-    num_of_peaks += 1;
-    peaking == true;
-    
-    if (reading_voltage){
+  if(ADCdata0 > max_ir) {
+    max_ir = ADCdata0;
+  }
 
+  if(ADCdata0 < min_ir) {
+    min_ir = ADCdata0;
+  }
+
+  if(ADCdata1 > max_red) {
+    max_red = ADCdata0;
+  }
+
+  if(ADCdata1 < min_red) {
+    min_red = ADCdata0;
+  }
+
+//  // Change 10 to the last index to count to
+//  for (int i=0; i<12; i++){
+//
+//      // Print statements
+//      Serial.print("Current element:");
+//      Serial.println(ADCdata0);
+//      Serial.println(upper);
+//      
+//      
+//      // If upper threshold is enabled
+//      if(upper){
+//          if (ADCdata0>=(midPoint + hysto_thresh)){
+//              printf("Upper Threshold Crossed\n");
+//              upper = false; 
+//          }
+//      // If lower threshold is enabled    
+//      } else if(!upper) {
+//          if (ADCdata0<=(midPoint - hysto_thresh)){
+//              printf("Lower Threshold Crossed\n");
+//              upper = true;
+//          }
+//      }   
+//  }
+//  
+  if(abs(ADCdata0 - 2048) < 5 && ADCdata0 < ADCdata0_old) {
+    
+    if(abs(peak_time[(num_peak-1)]-((double)millis() / 1000)) > 0.5){
+      //Serial.print("Test: ");
+      //Serial.println((double)millis() / 1000);
       
-        
-      switch(voltage_stream){
-        
-        case 0:
-          index_1[num_of_peaks] = ADCdata0;
-        case 1: 
-          index_2[num_of_peaks] = ADCdata0;
-        case 2:
-          index_3[num_of_peaks] = ADCdata0;
-        case 3:
-          index_4[num_of_peaks] = ADCdata0;
-        case 4:
-          index_5[num_of_peaks] = ADCdata0;
-        
-        
+      peak_time[num_peak] = (double)millis() / 1000;
+      num_peak += 1;
+
+//      Serial.print("peak: ");
+//      Serial.println((double)millis()/1000);
+//      Serial.print("index: ");
+//      Serial.println(num_peak%12);
+
+      if(num_peak > 12){
+        avg_time = 0;
+        num_peak = 0;
+
+        avg_time = peak_time[11] - peak_time[0];
+
+        Serial.print("Heart Rate: ");
+        Serial.println((12/avg_time)*60);
+
+        ir_level = log10((double)((max_ir - min_ir)*3.3/4096)/sqrt(2));
+        Serial.print("SO2: ");
+        red_level = log10((double)((max_red - min_red)*3.3/4096)/sqrt(2));
+        SO2 = red_level/ir_level;
+        if(SO2*100 < 90){
+          Serial.println("loading");
         }
-      
+        else{
+          Serial.println(SO2*100);
+        }
+        //Serial.println(SO2*100);
+        Serial.println(" ");
+
+        max_ir = 2048;
+        min_ir = 2048;
+        max_red = 2048;
+        min_red = 2048;
+      }
+      delay(5);
     }
-     
-
-
-    // We want to disable after we hit the other zero
-    reading_voltage = true;
-    
-  }else if(ADCdata0 >= midPoint && peaking == true){
-    peaking = false;
-
-    voltage_stream += 1;
-
-     // We only need this portion to get the Vpp 
-    reading_voltage = false;
-    // We can also do additional time processing here if needed
-    //
-    //
-    //
   }
 
-
-  if (num_of_peaks == 5){
-    // Get Heart Rate
-
-      // Convert ms to minute
-
-        for (int i=0; i<max_peaks; i++){
-          peak_times_voltage[max_peaks] = peak_times[max_peaks] * 1/60000; // divide by 1000 to get to second, then divide again to get to minutes
-         }
-      
-      // take the time difference between each point and divide it by the peak
-
-      peak_times_diff[0] = peak_times_voltage[1] - peak_times_voltage[0];
-      peak_times_diff[1] = peak_times_voltage[2] - peak_times_voltage[1];
-      peak_times_diff[2] = peak_times_voltage[3] - peak_times_voltage[2];
-      peak_times_diff[3] = peak_times_voltage[3] - peak_times_voltage[3];
-      peak_times_diff[4] = peak_times_voltage[4] - peak_times_voltage[4];
-
-      peak_time_diff_sum = peak_times_diff[0] + peak_times_diff[1] + peak_times_diff[2] + peak_times_diff[3] + peak_times_diff[4];
-      
-      // Average the values out
-
-      peak_time_diff_average = peak_time_diff_sum / 5; 
-
-    // Get AC amplitude
-      // PREV STEP: CREATE 5 VERY LARGE ARRAYS, KEEP TRACK OF THE VOLTAGE TILL THE THRESHOLD IS REACHED AGAIN
-      // take the maxes of each
-
-        
-          
-         index_1_max = max(index_1);
-         index_2_max = max(index_2);
-         index_3_max = max(index_3);
-         index_4_max = max(index_4);
-         index_5_max = max(index_5);
-      
-      // subtract 1.65 from each value
-      
-      // AVerage them
-
-       amplitude_sum = (index_1_max-midPoint)+(index_2_max-midPoint)+(index_3_max-midPoint)+(index_4_max-midPoint)+(index_5_max-midPoint);
-
-       amplitude_average = amplitude_sum/max_peaks;
-
-      ////////// take time average 
-
-       time_sum=peak_times_voltage[0]+peak_times_voltage[1]+peak_times_voltage[2]+peak_times_voltage[3]+peak_times_voltage[4];
-
-       time_average = time_sum/max_peaks;
-
-      SaO2 = (heart_average)/time_average;
-      hr = 5 / peak_time_diff_average;
-
-
-      Serial.print("Heartbeat = ");
-      Serial.println(hr);
-
-      Serial.print("SaO2 = ");
-      Serial.println(Sa02);
-  }
-  }
   
+  
+  ////Print ADC data
+//  Serial.print("ADC0 = ");
+//  Serial.println(ADCdata0);
+//  Serial.print("ADC1 = ");
+//  Serial.println(ADCdata1);
+  
+  ////Print PWM values
+  Serial.print("PWM = ");
+  Serial.println(pwm_output);
+//  Serial.print("High = ");
+//  Serial.println(highNum);
+//  Serial.print("Low = ");
+//  Serial.println(lowNum);
+//  Serial.print("Output = ");
+//  Serial.println(3.3/256 * pwm_output);
+
+  ////print Feedback value
+  //Serial.print("feedback = ");
+  //Serial.println(fb_val);
 }
